@@ -5,10 +5,10 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    email: __ACME_EMAIL__
+    email: email@example.com
     privateKeySecretRef:
       name: letsencrypt-key
     solvers:
     - http01:
         ingress:
-          ingressClassName: traefik   # your NIC IngressClass name
+          ingressClassName: traefik

@@ -37,10 +37,6 @@ CLUSTER_ISSUER="${ADDONS_DIR}/cluster-issuer/cluster-issuer.yaml"
 CERT_MANAGER_NS="cert-manager"
 TRAEFIK_NS="traefik"
 
-# ACME account email for the Let's Encrypt ClusterIssuer. Override via env:
-#   ACME_EMAIL="you@example.com" ./scripts/install-addons.sh
-ACME_EMAIL="${ACME_EMAIL:-}"
-
 ###############################################################################
 # Helpers
 ###############################################################################
@@ -59,9 +55,6 @@ cleanup() {
   if [[ -n "${RENDERED_OVERRIDE:-}" && -f "${RENDERED_OVERRIDE}" ]]; then
     rm -f "${RENDERED_OVERRIDE}"
   fi
-  if [[ -n "${RENDERED_ISSUER:-}" && -f "${RENDERED_ISSUER}" ]]; then
-    rm -f "${RENDERED_ISSUER}"
-  fi
 }
 trap cleanup EXIT
 
@@ -79,8 +72,6 @@ require_cmd helm
 [[ -d "${TRAEFIK_CHART}" ]]      || die "traefik chart not found at ${TRAEFIK_CHART}"
 [[ -f "${TRAEFIK_OVERRIDE}" ]]   || die "traefik override not found at ${TRAEFIK_OVERRIDE}"
 [[ -f "${CLUSTER_ISSUER}" ]]     || die "cluster-issuer manifest not found at ${CLUSTER_ISSUER}"
-
-[[ -n "${ACME_EMAIL}" ]] || die "ACME_EMAIL is not set. Provide the Let's Encrypt account email, e.g. ACME_EMAIL=\"you@example.com\" ${0}"
 
 ###############################################################################
 # Read Terraform outputs
@@ -194,17 +185,8 @@ helm upgrade --install traefik "${TRAEFIK_CHART}" \
 # Apply the Let's Encrypt ClusterIssuer
 ###############################################################################
 
-log "Applying Let's Encrypt ClusterIssuer (email: ${ACME_EMAIL})..."
-RENDERED_ISSUER="$(mktemp -t cluster-issuer.XXXXXX.yaml)"
-
-sed -e "s|__ACME_EMAIL__|${ACME_EMAIL}|g" "${CLUSTER_ISSUER}" > "${RENDERED_ISSUER}"
-
-# Guard: ensure the placeholder was substituted.
-if grep -q "__ACME_EMAIL__" "${RENDERED_ISSUER}"; then
-  die "Placeholder substitution failed; __ACME_EMAIL__ still present in rendered issuer."
-fi
-
-kubectl apply -f "${RENDERED_ISSUER}"
+log "Applying Let's Encrypt ClusterIssuer..."
+kubectl apply -f "${CLUSTER_ISSUER}"
 
 ###############################################################################
 # Summary
