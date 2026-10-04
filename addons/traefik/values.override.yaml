@@ -1,0 +1,126 @@
+# Traefik override values for the OKE cluster (ap-mumbai-1).
+#
+# Purpose: Traefik runs in-cluster and does all L7 routing itself; the OCI
+# Cloud Controller Manager provisions a plain L4 (TCP) load balancer that just
+# forwards 80/443 to the Traefik pods.
+#
+# The subnet1 and NSG OCIDs below are PLACEHOLDERS. scripts/install-addons.sh
+# substitutes them at install time with the live Terraform outputs
+# (public_subnet_id -> __PUBLIC_SUBNET_OCID__, lb_nsg_id -> __LB_NSG_OCID__).
+# Do not hardcode real OCIDs here.
+#
+# Installed via:
+#   ./scripts/install-addons.sh
+#
+# NOTE: This creates a NEW OCI load balancer with a NEW public IP.
+#       After it is provisioned, point your DNS A record to that new IP.
+
+# ---------------------------------------------------------------------------
+# Controller sizing (single replica; lightweight admin site)
+# ---------------------------------------------------------------------------
+deployment:
+  replicas: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi
+
+# ---------------------------------------------------------------------------
+# Ingress provider: consume standard networking.k8s.io Ingress objects
+# (the withshef-admin-ui chart renders a standard Ingress).
+# publishedService writes the LB address back into Ingress status.
+# ---------------------------------------------------------------------------
+providers:
+  kubernetesIngress:
+    enabled: true
+    publishedService:
+      enabled: true
+    # Watch all namespaces (app lives in `withshef`, solver pods land there too)
+    namespaces: []
+  kubernetesCRD:
+    enabled: true
+    allowCrossNamespace: false
+
+# Create a `traefik` IngressClass and make it the default so existing
+# Ingress objects that switch className: traefik are picked up.
+ingressClass:
+  enabled: true
+  isDefaultClass: false
+  name: traefik
+
+# ---------------------------------------------------------------------------
+# Entry points (ports). web=80, websecure=443.
+# HTTP is redirected to HTTPS, EXCEPT ACME HTTP-01 challenge traffic:
+# allowACMEByPass lets the /.well-known/acme-challenge/... path be served
+# on :80 so cert-manager HTTP-01 keeps working even with the redirect on.
+# ---------------------------------------------------------------------------
+ports:
+  web:
+    port: 8000
+    exposedPort: 80
+    expose:
+      default: true
+    protocol: TCP
+    # Allow ACME HTTP-01 challenge to bypass the HTTPS redirect on :80
+    allowACMEByPass: true
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    port: 8443
+    exposedPort: 443
+    expose:
+      default: true
+    protocol: TCP
+    http:
+      tls:
+        enabled: true
+
+# ---------------------------------------------------------------------------
+# Service: OCI L4 LoadBalancer in the PUBLIC subnet (where 80/443 are open),
+# attached to k8s-lb-nsg, flexible shape 10-100 Mbps (matches prior config).
+# externalTrafficPolicy: Local preserves client source IP.
+# ---------------------------------------------------------------------------
+service:
+  enabled: true
+  single: true
+  type: LoadBalancer
+  spec:
+    type: LoadBalancer
+    externalTrafficPolicy: Cluster
+  annotations:
+    # LB type: classic Layer-7-capable Load Balancer (we use it purely as L4 here)
+    oci.oraclecloud.com/load-balancer-type: "lb"
+    # Flexible shape bandwidth (matches existing IngressClassParameters)
+    service.beta.kubernetes.io/oci-load-balancer-shape: "flexible"
+    service.beta.kubernetes.io/oci-load-balancer-shape-flex-min: "10"
+    service.beta.kubernetes.io/oci-load-balancer-shape-flex-max: "100"
+    # Public LB (not internal) in the public subnet
+    service.beta.kubernetes.io/oci-load-balancer-internal: "false"
+    service.beta.kubernetes.io/oci-load-balancer-subnet1: "__PUBLIC_SUBNET_OCID__"
+    # Attach the LB frontend to k8s-lb-nsg (already allows 80/443 ingress).
+    # This annotation genuinely uses the oci.oraclecloud.com/ prefix.
+    oci.oraclecloud.com/oci-network-security-groups: "__LB_NSG_OCID__"
+    # We manage k8s-lb-nsg rules ourselves; tell CCM NOT to create/modify any
+    # NSG or security list. ("NSG" mode makes CCM try to CreateNetworkSecurityGroup,
+    # which the OKE identity isn't authorized to do -> LB never provisions.)
+    oci.oraclecloud.com/security-rule-management-mode: "None"
+
+# ---------------------------------------------------------------------------
+# Do NOT expose the Traefik dashboard/API port publicly.
+# ---------------------------------------------------------------------------
+ingressRoute:
+  dashboard:
+    enabled: false
+
+# Reasonable logging for troubleshooting the migration.
+log:
+  level: INFO
+accessLog: {}
