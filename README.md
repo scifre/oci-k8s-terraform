@@ -20,6 +20,7 @@ post-apply script to install cert-manager, Traefik, and a Let's Encrypt ClusterI
 - [Outputs](#outputs)
 - [Project layout](#project-layout)
 - [Teardown](#teardown)
+- [Future plans](#future-plans)
 
 ---
 
@@ -302,3 +303,14 @@ KUBECONFIG=./kubeconfig helm uninstall traefik -n traefik
 # wait for the LB to be deleted, then:
 terraform destroy
 ```
+
+---
+
+## Future plans
+
+- **PVC / persistent-volume plugin.** Add a CSI driver (e.g. the OCI Block Volume
+  CSI plugin) and a default `StorageClass` so workloads can request `PersistentVolumeClaim`s
+  and have `PersistentVolume`s provisioned dynamically. Note the Always Free constraint:
+  boot volumes already consume 180 GB of the 200 GB Block Volume allowance, leaving only
+  ~20 GB of headroom for PVCs before charges apply — see
+  [Always Free cost](#always-free-cost).
