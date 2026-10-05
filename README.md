@@ -29,9 +29,9 @@ The diagram below shows the overall topology: the VCN with its public and privat
 subnets, the OKE control plane and worker node pool, and the in-cluster add-ons
 (Traefik + cert-manager) that front traffic through an OCI load balancer.
 
-![OCI OKE cluster architecture](./oci-arch.svg)
+![OCI OKE cluster architecture](./oci-arch.png)
 
-> 📐 [View the full architecture diagram (SVG)](./oci-arch.svg)
+> 📐 [View the full architecture diagram (SVG)](./oci-arch.png)
 
 ---
 
@@ -271,7 +271,7 @@ After `terraform apply`, these outputs are available via `terraform output`:
 ├── versions.tf             # provider/version pins
 ├── terraform.tfvars.example
 ├── docs/
-│   └── oci-arch.svg        # architecture diagram (referenced in this README)
+│   └── oci-arch.png        # architecture diagram (referenced in this README)
 ├── modules/
 │   ├── network/            # VCN, subnets, gateways, route tables, NSGs
 │   ├── cluster/            # OKE cluster
